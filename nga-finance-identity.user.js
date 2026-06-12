@@ -17,6 +17,8 @@
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
 // @connect      *
+// @downloadURL  https://raw.githubusercontent.com/fuchaohan/nga-finance-identity/main/nga-finance-identity.user.js
+// @updateURL    https://raw.githubusercontent.com/fuchaohan/nga-finance-identity/main/nga-finance-identity.user.js
 // @run-at       document-end
 // ==/UserScript==
 
