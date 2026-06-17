@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA大韭菜指数
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  一键抓取NGA用户回帖，分析其金融身份(韭菜、反串、大神)。通过自定义 OpenAI 兼容接口调用第三方 AI。
 // @author       You
 // @match        *://bbs.nga.cn/read.php?*
@@ -98,7 +98,6 @@
 
     const PROMPT_END = `\n\n===== [金融身份鉴定 结束] =====`;
 
-    // ===================== 配置管理 =====================
     function getConfig() {
         return {
             baseUrl: (GM_getValue(CFG_BASE_URL, DEFAULT_BASE_URL) || "").replace(/\/+$/, ""),
@@ -112,7 +111,6 @@
     }
 
     function debugReport(hypothesisId, location, msg, data, traceId) {
-        // #region debug-point Z:report-helper
         fetch(DEBUG_SERVER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -127,7 +125,6 @@
                 ts: Date.now()
             })
         }).catch(function () {});
-        // #endregion
     }
 
     function registerConfigMenu() {
@@ -156,7 +153,6 @@
         });
     }
 
-    // ===================== 样式 =====================
     GM_addStyle(`
         .nga-finance-btn {
             margin-left: 8px;
@@ -171,7 +167,6 @@
         }
         .nga-finance-btn:hover { background: #e52b6d; }
         .nga-finance-btn:disabled { background: #ccc; cursor: not-allowed; }
-
         #nga-finance-drawer {
             position: fixed; top: 0; right: 0; width: 480px; height: 100vh;
             background: #fff; box-shadow: -5px 0 25px rgba(0,0,0,0.2); z-index: 999999;
@@ -415,7 +410,6 @@
         }
     `);
 
-    // ===================== 环境判断 =====================
     var host = window.location.host;
     var isNgaPage = host.indexOf("nga.cn") !== -1 || host.indexOf("ngabbs.com") !== -1 || host.indexOf("nga.178.com") !== -1;
 
@@ -424,7 +418,6 @@
         initNgaLogic();
     }
 
-    // ===================== NGA页面逻辑 =====================
     function initNgaLogic() {
         initDrawer();
         injectButtons();
@@ -497,7 +490,6 @@
         var traceId = "nga-" + uid + "-" + Date.now();
         var avatarUrl = btn.dataset.avatarUrl || "";
         var profileUrl = btn.dataset.profileUrl || "";
-        // #region debug-point A:start-analysis
         debugReport("A", "nga-finance-identity.user.js:startAnalysis", "startAnalysis entered", {
             uid: uid,
             username: username,
@@ -507,15 +499,12 @@
             hasAvatarUrl: !!avatarUrl,
             profileUrl: profileUrl
         }, traceId);
-        // #endregion
         if (!isConfigValid(cfg)) {
-            // #region debug-point A:invalid-config
             debugReport("A", "nga-finance-identity.user.js:startAnalysis", "config invalid", {
                 baseUrl: cfg.baseUrl || "",
                 hasApiKey: !!cfg.apiKey,
                 model: cfg.model || ""
             }, traceId);
-            // #endregion
             alert("请先在油猴菜单中配置 Base URL / API Key / Model");
             return;
         }
@@ -534,36 +523,30 @@
             var profileMeta = results[1];
 
             var content = parsePost(html);
-            // #region debug-point B:parsed-post
             debugReport("B", "nga-finance-identity.user.js:startAnalysis", "parsed post content", {
                 contentLength: content.length,
                 profileMeta: profileMeta
             }, traceId);
-            // #endregion
             if (content.length < MIN_CONTENT_LEN) throw new Error("回帖太少，无法鉴定");
 
             var fullPrompt = PROMPT.replace("{USERNAME}", username) + content;
             var limit = MAX_CONTENT_LEN - PROMPT_END.length;
             if (fullPrompt.length > limit) fullPrompt = fullPrompt.slice(0, limit) + "...(内容过长截断)";
             fullPrompt += PROMPT_END;
-            // #region debug-point C:prompt-ready
             debugReport("C", "nga-finance-identity.user.js:startAnalysis", "prompt ready", {
                 promptLength: fullPrompt.length,
                 endpoint: cfg.baseUrl + "/chat/completions",
                 model: cfg.model
             }, traceId);
-            // #endregion
 
             document.getElementById("drawer-body").innerHTML = '<span class="placeholder">⏳ AI 分析中，请稍候…</span>';
             document.getElementById("footer-status").textContent = "请求 API: " + cfg.model;
 
             await callAI(cfg, fullPrompt, username, avatarUrl, profileMeta, traceId);
         } catch (err) {
-            // #region debug-point E:start-analysis-catch
             debugReport("E", "nga-finance-identity.user.js:startAnalysis", "startAnalysis caught error", {
                 message: err && err.message ? err.message : String(err)
             }, traceId);
-            // #endregion
             document.getElementById("drawer-body").innerHTML = '<span class="nga-finance-error">❌ 错误：' + (err.message || err) + '</span>';
             document.getElementById("footer-status").textContent = "失败";
         } finally {
@@ -579,21 +562,17 @@
                 url: url,
                 overrideMimeType: "text/html; charset=gbk",
                 onload: function (res) {
-                    // #region debug-point B:nga-fetch-onload
                     debugReport("B", "nga-finance-identity.user.js:fetchNgaPage", "nga page fetch completed", {
                         tag: tag || "",
                         status: res.status,
                         responseLength: (res.responseText || "").length
                     }, traceId);
-                    // #endregion
                     res.status === 200 ? resolve(res.responseText) : reject(new Error("请求失败：" + res.status));
                 },
                 onerror: function () {
-                    // #region debug-point B:nga-fetch-onerror
                     debugReport("B", "nga-finance-identity.user.js:fetchNgaPage", "nga page fetch network error", {
                         tag: tag || ""
                     }, traceId);
-                    // #endregion
                     reject(new Error("网络错误"));
                 }
             });
@@ -601,15 +580,7 @@
     }
 
     function findAvatarUrl(author) {
-        var containers = [
-            author,
-            author.parentElement,
-            author.closest("td"),
-            author.closest("tr"),
-            author.closest("table"),
-            author.closest("[id^='post']"),
-            author.closest(".posterinfo")
-        ];
+        var containers = [author, author.parentElement, author.closest("td"), author.closest("tr"), author.closest("table"), author.closest("[id^='post']"), author.closest(".posterinfo")];
         var bestScore = -1;
         var bestUrl = "";
         var seen = {};
@@ -682,38 +653,15 @@
         var rawText = collectProfileText(author);
         var compactText = compactMetaText(rawText);
         return {
-            ipLocation: extractMetaValue(compactText, [
-                /IP属地[:：]?([^\s|,，#]+)/i,
-                /属地[:：]?([^\s|,，#]+)/i
-            ], "未公开"),
-            registerTime: extractMetaValue(compactText, [
-                /注册(?:日期|时间)?[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s][0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i
-            ], "未知"),
-            postCount: normalizePostCount(extractMetaValue(compactText, [
-                /发帖数[:：]?([0-9][0-9,万千wW+]*)/i,
-                /发帖[:：]?([0-9][0-9,万千wW+]*)/i,
-                /帖子数[:：]?([0-9][0-9,万千wW+]*)/i
-            ], "未知")),
-            userGroup: extractMetaValue(compactText, [
-                /用户组[:：]?([^|,，#]+)/i,
-                /组别[:：]?([^|,，#]+)/i,
-                /级别[:：]?([^|,，#]+)/i,
-                /威望[:：]?([^|,，#]+)/i
-            ], "未知")
+            ipLocation: extractMetaValue(compactText, [/IP属地[:：]?([^\s|,，#]+)/i, /属地[:：]?([^\s|,，#]+)/i], "未公开"),
+            registerTime: extractMetaValue(compactText, [/注册(?:日期|时间)?[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s][0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i], "未知"),
+            postCount: normalizePostCount(extractMetaValue(compactText, [/发帖数[:：]?([0-9][0-9,万千wW+]*)/i, /发帖[:：]?([0-9][0-9,万千wW+]*)/i, /帖子数[:：]?([0-9][0-9,万千wW+]*)/i], "未知")),
+            userGroup: extractMetaValue(compactText, [/用户组[:：]?([^|,，#]+)/i, /组别[:：]?([^|,，#]+)/i, /级别[:：]?([^|,，#]+)/i, /威望[:：]?([^|,，#]+)/i], "未知")
         };
     }
 
     function collectProfileText(author) {
-        var containers = [
-            author,
-            author.parentElement,
-            author.closest("td"),
-            author.closest("tr"),
-            author.closest("table"),
-            author.closest("[id^='post']"),
-            author.closest(".posterinfo"),
-            author.closest(".postauthor")
-        ];
+        var containers = [author, author.parentElement, author.closest("td"), author.closest("tr"), author.closest("table"), author.closest("[id^='post']"), author.closest(".posterinfo"), author.closest(".postauthor")];
         var seen = {};
         var parts = [];
         for (var i = 0; i < containers.length; i++) {
@@ -728,10 +676,7 @@
     }
 
     function compactMetaText(text) {
-        return String(text || "")
-            .replace(/[\u00a0\u1680\u180e\u2000-\u200d\u202f\u205f\u3000]/g, " ")
-            .replace(/\s+/g, "")
-            .replace(/[|¦｜]/g, "|");
+        return String(text || "").replace(/[\u00a0\u1680\u180e\u2000-\u200d\u202f\u205f\u3000]/g, " ").replace(/\s+/g, "").replace(/[|¦｜]/g, "|");
     }
 
     function parseProfileMetaFromProfilePage(html) {
@@ -740,38 +685,20 @@
         var lines = extractNormalizedProfileLines(rawText);
         var text = lines.join("|");
         var lineMeta = extractProfileMetaFromLines(lines);
-        var parsed = {
-            ipLocation: extractMetaValue(text, [
-                /(?:IP属地|IP地区|IP地域)[:：]?([^|#]+)/i
-            ], lineMeta.ipLocation || "未公开"),
-            registerTime: extractMetaValue(text, [
-                /注册日期[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i,
-                /注册时间[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i
-            ], lineMeta.registerTime || "未知"),
-            postCount: normalizePostCount(extractMetaValue(text, [
-                /(?:发帖数|发帖|帖子数)[:：]?([0-9][0-9,万千wW+]*)/i
-            ], lineMeta.postCount || "未知")),
-            userGroup: extractMetaValue(text, [
-                /用户组[:：]?([^|#]+)/i
-            ], lineMeta.userGroup || "未知")
+        return {
+            ipLocation: extractMetaValue(text, [/(?:IP属地|IP地区|IP地域)[:：]?([^|#]+)/i], lineMeta.ipLocation || "未公开"),
+            registerTime: extractMetaValue(text, [/注册日期[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i, /注册时间[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i], lineMeta.registerTime || "未知"),
+            postCount: normalizePostCount(extractMetaValue(text, [/(?:发帖数|发帖|帖子数)[:：]?([0-9][0-9,万千wW+]*)/i], lineMeta.postCount || "未知")),
+            userGroup: extractMetaValue(text, [/用户组[:：]?([^|#]+)/i], lineMeta.userGroup || "未知")
         };
-        return parsed;
     }
 
     function extractNormalizedProfileLines(text) {
-        return String(text || "")
-            .split(/\r?\n+/)
-            .map(function (line) { return compactMetaText(line); })
-            .filter(function (line) { return !!line; });
+        return String(text || "").split(/\r?\n+/).map(function (line) { return compactMetaText(line); }).filter(function (line) { return !!line; });
     }
 
     function extractProfileMetaFromLines(lines) {
-        var meta = {
-            ipLocation: "未公开",
-            registerTime: "未知",
-            postCount: "未知",
-            userGroup: "未知"
-        };
+        var meta = { ipLocation: "未公开", registerTime: "未知", postCount: "未知", userGroup: "未知" };
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             var nextLine = i + 1 < lines.length ? lines[i + 1] : "";
@@ -792,9 +719,7 @@
         var value = "";
         var match = String(line || "").match(/^[^:：]+[:：](.*)$/);
         if (match) value = match[1];
-        if (!value && nextLine && nextLine.indexOf(":") === -1 && nextLine.indexOf("：") === -1) {
-            value = nextLine;
-        }
+        if (!value && nextLine && nextLine.indexOf(":") === -1 && nextLine.indexOf("：") === -1) value = nextLine;
         value = sanitizeProfileValue(value);
         return value || fallback;
     }
@@ -802,9 +727,7 @@
     function extractMetaValue(text, patterns, fallback) {
         for (var i = 0; i < patterns.length; i++) {
             var match = String(text || "").match(patterns[i]);
-            if (match && match[1]) {
-                return sanitizeProfileValue(match[1]);
-            }
+            if (match && match[1]) return sanitizeProfileValue(match[1]);
         }
         return fallback;
     }
@@ -829,11 +752,7 @@
     }
 
     function sanitizeProfileValue(value) {
-        return String(value || "")
-            .replace(/^[\s:：|/-]+/, "")
-            .replace(/[\s|/]+$/, "")
-            .replace(/(?:UID[:：]?\d+|用户信息|基础信息|状态)$/i, "")
-            .trim();
+        return String(value || "").replace(/^[\s:：|/-]+/, "").replace(/[\s|/]+$/, "").replace(/(?:UID[:：]?\d+|用户信息|基础信息|状态)$/i, "").trim();
     }
 
     function normalizePostCount(value) {
@@ -852,13 +771,7 @@
     function scoreAvatarImage(img, src) {
         if (!src || /^data:/i.test(src)) return -1;
         var score = 0;
-        var hint = [
-            img.className || "",
-            img.id || "",
-            img.getAttribute("alt") || "",
-            img.getAttribute("title") || "",
-            src
-        ].join(" ").toLowerCase();
+        var hint = [img.className || "", img.id || "", img.getAttribute("alt") || "", img.getAttribute("title") || "", src].join(" ").toLowerCase();
         var width = img.naturalWidth || img.width || parseInt(img.getAttribute("width"), 10) || 0;
         var height = img.naturalHeight || img.height || parseInt(img.getAttribute("height"), 10) || 0;
         if (/avatar|头像|head|face|photo/.test(hint)) score += 8;
@@ -874,11 +787,7 @@
         if (!url) return "";
         if (url.indexOf("//") === 0) return window.location.protocol + url;
         if (/^https?:\/\//i.test(url)) return url;
-        try {
-            return new URL(url, window.location.href).href;
-        } catch (e) {
-            return url;
-        }
+        try { return new URL(url, window.location.href).href; } catch (e) { return url; }
     }
 
     function openDrawerWith(bodyHtml, status, username) {
@@ -892,113 +801,70 @@
         document.getElementById("footer-clear").style.display = "none";
     }
 
-    // ===================== 调用第三方 AI (OpenAI 兼容) =====================
     function callAI(cfg, prompt, username, avatarUrl, profileMeta, traceId) {
         return new Promise(function (resolve, reject) {
             var endpoint = cfg.baseUrl + "/chat/completions";
             var body = JSON.stringify({
                 model: cfg.model,
                 stream: false,
-                messages: [
-                    { role: "system", content: "你是一名资深的金融社区观察员和心理学专家。" },
-                    { role: "user", content: prompt }
-                ]
+                messages: [{ role: "system", content: "你是一名资深的金融社区观察员和心理学专家。" }, { role: "user", content: prompt }]
             });
 
             var bodyEl = document.getElementById("drawer-body");
             var statusEl = document.getElementById("footer-status");
             bodyEl.innerHTML = "";
             bodyEl.dataset.raw = "";
-            // #region debug-point C:call-ai-enter
-            debugReport("C", "nga-finance-identity.user.js:callAI", "callAI entered", {
-                endpoint: endpoint,
-                model: cfg.model,
-                bodyLength: body.length
-            }, traceId);
-            // #endregion
+            debugReport("C", "nga-finance-identity.user.js:callAI", "callAI entered", { endpoint: endpoint, model: cfg.model, bodyLength: body.length }, traceId);
 
             GM_xmlhttpRequest({
                 method: "POST",
                 url: endpoint,
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + cfg.apiKey
-                },
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.apiKey },
                 data: body,
                 responseType: "json",
                 onloadstart: function () {
-                    // #region debug-point D:api-onloadstart
                     debugReport("D", "nga-finance-identity.user.js:callAI", "api connection opened", {}, traceId);
-                    // #endregion
                     statusEl.textContent = "已连接，请求处理中…";
                 },
                 onload: function (res) {
                     var finalPayload = res.response !== undefined ? res.response : res.responseText;
                     var finalText = typeof finalPayload === "string" ? finalPayload : JSON.stringify(finalPayload || {});
-                    // #region debug-point D:api-onload
-                    debugReport("D", "nga-finance-identity.user.js:callAI", "api request completed", {
-                        status: res.status,
-                        statusText: res.statusText || "",
-                        finalLength: finalText.length,
-                        renderedLength: (bodyEl.dataset.raw || "").length
-                    }, traceId);
-                    // #endregion
+                    debugReport("D", "nga-finance-identity.user.js:callAI", "api request completed", { status: res.status, statusText: res.statusText || "", finalLength: finalText.length, renderedLength: (bodyEl.dataset.raw || "").length }, traceId);
                     if (res.status >= 200 && res.status < 300) {
                         bodyEl.dataset.raw = extractAssistantText(finalPayload);
                         if (bodyEl.dataset.raw) {
                             var structuredReport = tryParseReport(bodyEl.dataset.raw, username, avatarUrl, profileMeta);
-                            if (structuredReport) {
-                                bodyEl.innerHTML = renderReportCard(structuredReport, cfg.model);
-                            } else {
-                                bodyEl.textContent = bodyEl.dataset.raw;
-                            }
+                            if (structuredReport) bodyEl.innerHTML = renderReportCard(structuredReport, cfg.model);
+                            else bodyEl.textContent = bodyEl.dataset.raw;
                             bodyEl.scrollTop = bodyEl.scrollHeight;
                             statusEl.textContent = "✅ 完成";
                             document.getElementById("footer-shot").style.display = "inline-block";
                             document.getElementById("footer-copy").style.display = "inline-block";
                             document.getElementById("footer-clear").style.display = "inline-block";
-                            // #region debug-point E:api-success
-                            debugReport("E", "nga-finance-identity.user.js:callAI", "api success rendered", {
-                                renderedLength: (bodyEl.dataset.raw || "").length
-                            }, traceId);
-                            // #endregion
+                            debugReport("E", "nga-finance-identity.user.js:callAI", "api success rendered", { renderedLength: (bodyEl.dataset.raw || "").length }, traceId);
                             resolve(bodyEl.dataset.raw);
                         } else {
                             bodyEl.innerHTML = '<span class="nga-finance-error">❌ 接口已返回，但内容为空。原始响应片段：' + escapeHtml(finalText.slice(0, 800)) + '</span>';
                             statusEl.textContent = "空响应";
-                            // #region debug-point E:api-empty
-                            debugReport("E", "nga-finance-identity.user.js:callAI", "api returned empty content", {
-                                rawPreview: finalText.slice(0, 300)
-                            }, traceId);
-                            // #endregion
+                            debugReport("E", "nga-finance-identity.user.js:callAI", "api returned empty content", { rawPreview: finalText.slice(0, 300) }, traceId);
                             reject(new Error("接口返回成功，但内容为空"));
                         }
                     } else {
-                        // 尝试解析错误体
                         var msg = res.status + " " + (res.statusText || "");
                         try {
                             var j = JSON.parse(finalText);
                             msg = (j.error && (j.error.message || j.error.code)) || j.message || msg;
-                        } catch (e) { }
+                        } catch (e) {}
                         bodyEl.innerHTML = '<span class="nga-finance-error">❌ API 错误：' + escapeHtml(msg) + '</span>';
                         statusEl.textContent = "失败";
-                        // #region debug-point E:api-error
-                        debugReport("E", "nga-finance-identity.user.js:callAI", "api returned error", {
-                            status: res.status,
-                            message: msg
-                        }, traceId);
-                        // #endregion
+                        debugReport("E", "nga-finance-identity.user.js:callAI", "api returned error", { status: res.status, message: msg }, traceId);
                         reject(new Error(msg));
                     }
                 },
                 onerror: function (err) {
                     bodyEl.innerHTML = '<span class="nga-finance-error">❌ 网络错误：' + escapeHtml(err.error || "无法连接") + '</span>';
                     statusEl.textContent = "失败";
-                    // #region debug-point E:api-network-error
-                    debugReport("E", "nga-finance-identity.user.js:callAI", "api network error", {
-                        error: err && err.error ? err.error : "unknown"
-                    }, traceId);
-                    // #endregion
+                    debugReport("E", "nga-finance-identity.user.js:callAI", "api network error", { error: err && err.error ? err.error : "unknown" }, traceId);
                     reject(new Error("网络错误"));
                 }
             });
@@ -1008,19 +874,13 @@
     function extractAssistantText(payload) {
         var obj = payload;
         if (typeof obj === "string") {
-            try {
-                obj = JSON.parse(obj);
-            } catch (e) {
-                return "";
-            }
+            try { obj = JSON.parse(obj); } catch (e) { return ""; }
         }
         if (!obj || !obj.choices || !obj.choices.length) return "";
         var choice = obj.choices[0] || {};
         if (choice.message && typeof choice.message.content === "string") return choice.message.content;
         if (Array.isArray(choice.message && choice.message.content)) {
-            return choice.message.content.map(function (item) {
-                return item && typeof item.text === "string" ? item.text : "";
-            }).join("");
+            return choice.message.content.map(function (item) { return item && typeof item.text === "string" ? item.text : ""; }).join("");
         }
         if (typeof choice.text === "string") return choice.text;
         return "";
@@ -1029,11 +889,7 @@
     function tryParseReport(text, fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta) {
         var jsonText = extractJsonText(text);
         if (!jsonText) return null;
-        try {
-            return normalizeReport(JSON.parse(jsonText), fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta);
-        } catch (e) {
-            return null;
-        }
+        try { return normalizeReport(JSON.parse(jsonText), fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta); } catch (e) { return null; }
     }
 
     function extractJsonText(text) {
@@ -1057,34 +913,17 @@
             avatarUrl: normalizeAvatarUrl(report.avatarUrl || fallbackAvatarUrl || ""),
             profile: normalizeProfile(profile),
             summaryTags: normalizeStringArray(report.summaryTags, 4, ["趋势分析", "复盘控", "AI锐评", "跟车选手"]),
-            hotness: {
-                harvestScore: normalizeScore(hotness.harvestScore, 3.2),
-                victimScore: normalizeScore(hotness.victimScore, 2.8),
-                overallLevel: normalizeLevel(hotness.overallLevel),
-                summary: asText(hotness.summary || "综合危险等级：中")
-            },
+            hotness: { harvestScore: normalizeScore(hotness.harvestScore, 3.2), victimScore: normalizeScore(hotness.victimScore, 2.8), overallLevel: normalizeLevel(hotness.overallLevel), summary: asText(hotness.summary || "综合危险等级：中") },
             identityTags: normalizeObjectArray(report.identityTags, 4, function (item, i) {
                 var fallback = ["趋势分析师", "复盘控", "AI铁佬", "跟车选手"][i] || ("标签" + (i + 1));
-                return {
-                    tag: asText(item && item.tag || fallback),
-                    desc: asText(item && item.desc || "该标签暂无详细说明。")
-                };
+                return { tag: asText(item && item.tag || fallback), desc: asText(item && item.desc || "该标签暂无详细说明。") };
             }),
             harvestAnalysis: asText(report.harvestAnalysis || "该用户更偏向情绪表达和观点复读，暂未体现出强烈的“带人上车”能力。"),
             behaviorPatterns: normalizeObjectArray(report.behaviorPatterns, 4, function (item, i) {
                 var titles = ["带节奏", "逻辑陷阱", "逻辑漏洞", "情绪控制"];
-                return {
-                    title: asText(item && item.title || titles[i] || ("行为项" + (i + 1))),
-                    level: asText(item && item.level || "中等"),
-                    desc: asText(item && item.desc || "暂无额外分析。")
-                };
+                return { title: asText(item && item.title || titles[i] || ("行为项" + (i + 1))), level: asText(item && item.level || "中等"), desc: asText(item && item.desc || "暂无额外分析。") };
             }),
-            riskList: normalizeObjectArray(report.riskList, 5, function (item, i) {
-                return {
-                    title: asText(item && item.title || ("风险标签" + (i + 1))),
-                    desc: asText(item && item.desc || "暂无补充说明。")
-                };
-            }),
+            riskList: normalizeObjectArray(report.riskList, 5, function (item, i) { return { title: asText(item && item.title || ("风险标签" + (i + 1))), desc: asText(item && item.desc || "暂无补充说明。") }; }),
             closingLine: asText(report.closingLine || "你问哥值不值先看仓位，哥问你敢不敢先看脑子。"),
             disclaimer: asText(report.disclaimer || FIXED_DISCLAIMER)
         };
@@ -1104,9 +943,7 @@
     function normalizeObjectArray(value, maxLen, mapper) {
         var arr = Array.isArray(value) ? value : [];
         var result = [];
-        for (var i = 0; i < maxLen; i++) {
-            result.push(mapper(arr[i], i));
-        }
+        for (var i = 0; i < maxLen; i++) result.push(mapper(arr[i], i));
         return result;
     }
 
@@ -1145,69 +982,13 @@
 
     function renderReportCard(report, modelName) {
         var generatedAt = formatGeneratedAt(new Date());
-        var avatarHtml = report.avatarUrl
-            ? '<img src="' + escapeHtml(report.avatarUrl) + '" alt="' + escapeHtml(report.username) + '">'
-            : escapeHtml(report.username.slice(0, 1).toUpperCase());
-        var submetaItems = [
-            "📍 " + report.profile.ipLocation,
-            "🗓️ " + report.profile.registerTime,
-            "📝 " + report.profile.postCount,
-            "👥 " + report.profile.userGroup
-        ];
-        var chipsHtml = report.summaryTags.map(function (tag, index) {
-            return '<span class="nga-report-chip' + (index === 0 ? ' active' : '') + '">' + escapeHtml(tag) + '</span>';
-        }).join("");
-        var identityHtml = report.identityTags.map(function (item) {
-            return '<div class="nga-tag-item"><span class="nga-item-badge">' + escapeHtml(item.tag) + '</span>' + escapeHtml(item.desc) + '</div>';
-        }).join("");
-        var behaviorHtml = report.behaviorPatterns.map(function (item) {
-            return '<div class="nga-behavior-item"><span class="nga-item-badge">' + escapeHtml(item.title + " · " + item.level) + '</span>' + escapeHtml(item.desc) + '</div>';
-        }).join("");
-        var riskHtml = report.riskList.map(function (item, index) {
-            return '<div class="nga-risk-item"><div class="nga-risk-index">' + (index + 1) + '</div><div><div class="nga-risk-title">' + escapeHtml(item.title) + '</div><div class="nga-risk-desc">' + escapeHtml(item.desc) + '</div></div></div>';
-        }).join("");
-
-        return '' +
-            '<div class="nga-report-card">' +
-                '<div class="nga-report-header">' +
-                    '<div class="nga-report-avatar">' + avatarHtml + '</div>' +
-                    '<div>' +
-                        '<div class="nga-report-name">' + escapeHtml(report.username) + '</div>' +
-                        '<div class="nga-report-submeta">' +
-                            '<span>' + escapeHtml(submetaItems[0]) + '</span>' +
-                            '<span>' + escapeHtml(submetaItems[1]) + '</span>' +
-                            '<span>' + escapeHtml(submetaItems[2]) + '</span>' +
-                            '<span>' + escapeHtml(submetaItems[3]) + '</span>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="nga-report-tabs">' + chipsHtml + '</div>' +
-                '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">🎯 割韭菜指数评估</div>' +
-                    renderScoreBar("镰刀锋利", report.hotness.harvestScore, "harvest") +
-                    renderScoreBar("韭菜鲜嫩", report.hotness.victimScore, "victim") +
-                    '<div class="nga-score-summary">' + escapeHtml(report.hotness.summary) + '</div>' +
-                '</div>' +
-                '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">🔴 核心身份标签</div>' +
-                    identityHtml +
-                '</div>' +
-                '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">🔴 割韭菜程度分析</div>' +
-                    '<div class="nga-tag-item">' + escapeHtml(report.harvestAnalysis) + '</div>' +
-                '</div>' +
-                '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">🔴 行为模式分析</div>' +
-                    behaviorHtml +
-                '</div>' +
-                '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">🔴 交易体系警惕</div>' +
-                    riskHtml +
-                '</div>' +
-                '<div class="nga-report-quote"><div class="nga-report-quote-title">毒舌结案陈词</div><div>' + escapeHtml(report.closingLine) + '</div></div>' +
-                '<div class="nga-report-disclaimer">' + escapeHtml(FIXED_DISCLAIMER) + '</div>' +
-                '<div class="nga-report-footer"><span>NGA大韭菜指数 · ' + escapeHtml(generatedAt) + ' · ' + escapeHtml(modelName || "未知模型") + '</span><span>第三方 AI 生成</span></div>' +
-            '</div>';
+        var avatarHtml = report.avatarUrl ? '<img src="' + escapeHtml(report.avatarUrl) + '" alt="' + escapeHtml(report.username) + '">' : escapeHtml(report.username.slice(0, 1).toUpperCase());
+        var submetaItems = ["📍 " + report.profile.ipLocation, "🗓️ " + report.profile.registerTime, "📝 " + report.profile.postCount, "👥 " + report.profile.userGroup];
+        var chipsHtml = report.summaryTags.map(function (tag, index) { return '<span class="nga-report-chip' + (index === 0 ? ' active' : '') + '">' + escapeHtml(tag) + '</span>'; }).join("");
+        var identityHtml = report.identityTags.map(function (item) { return '<div class="nga-tag-item"><span class="nga-item-badge">' + escapeHtml(item.tag) + '</span>' + escapeHtml(item.desc) + '</div>'; }).join("");
+        var behaviorHtml = report.behaviorPatterns.map(function (item) { return '<div class="nga-behavior-item"><span class="nga-item-badge">' + escapeHtml(item.title + " · " + item.level) + '</span>' + escapeHtml(item.desc) + '</div>'; }).join("");
+        var riskHtml = report.riskList.map(function (item, index) { return '<div class="nga-risk-item"><div class="nga-risk-index">' + (index + 1) + '</div><div><div class="nga-risk-title">' + escapeHtml(item.title) + '</div><div class="nga-risk-desc">' + escapeHtml(item.desc) + '</div></div></div>'; }).join("");
+        return '<div class="nga-report-card"><div class="nga-report-header"><div class="nga-report-avatar">' + avatarHtml + '</div><div><div class="nga-report-name">' + escapeHtml(report.username) + '</div><div class="nga-report-submeta"><span>' + escapeHtml(submetaItems[0]) + '</span><span>' + escapeHtml(submetaItems[1]) + '</span><span>' + escapeHtml(submetaItems[2]) + '</span><span>' + escapeHtml(submetaItems[3]) + '</span></div></div></div><div class="nga-report-tabs">' + chipsHtml + '</div><div class="nga-report-section"><div class="nga-report-title">🎯 割韭菜指数评估</div>' + renderScoreBar("镰刀锋利", report.hotness.harvestScore, "harvest") + renderScoreBar("韭菜鲜嫩", report.hotness.victimScore, "victim") + '<div class="nga-score-summary">' + escapeHtml(report.hotness.summary) + '</div></div><div class="nga-report-section"><div class="nga-report-title">🔴 核心身份标签</div>' + identityHtml + '</div><div class="nga-report-section"><div class="nga-report-title">🔴 割韭菜程度分析</div><div class="nga-tag-item">' + escapeHtml(report.harvestAnalysis) + '</div></div><div class="nga-report-section"><div class="nga-report-title">🔴 行为模式分析</div>' + behaviorHtml + '</div><div class="nga-report-section"><div class="nga-report-title">🔴 交易体系警惕</div>' + riskHtml + '</div><div class="nga-report-quote"><div class="nga-report-quote-title">毒舌结案陈词</div><div>' + escapeHtml(report.closingLine) + '</div></div><div class="nga-report-disclaimer">' + escapeHtml(FIXED_DISCLAIMER) + '</div><div class="nga-report-footer"><span>NGA大韭菜指数 · ' + escapeHtml(generatedAt) + ' · ' + escapeHtml(modelName || "未知模型") + '</span><span>第三方 AI 生成</span></div></div>';
     }
 
     function formatGeneratedAt(date) {
@@ -1239,18 +1020,9 @@
             return;
         }
         statusEl.textContent = "📸 正在生成截图…";
-        html2canvas(target, {
-            backgroundColor: null,
-            useCORS: true,
-            allowTaint: false,
-            scale: Math.max(2, window.devicePixelRatio || 1)
-        }).then(function (canvas) {
+        html2canvas(target, { backgroundColor: null, useCORS: true, allowTaint: false, scale: Math.max(2, window.devicePixelRatio || 1) }).then(function (canvas) {
             return canvasToBlob(canvas).then(function (blob) {
-                return navigator.clipboard.write([
-                    new ClipboardItem({
-                        "image/png": blob
-                    })
-                ]);
+                return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
             });
         }).then(function () {
             statusEl.textContent = "✅ 截图已复制到剪贴板";
@@ -1262,30 +1034,19 @@
 
     function canvasToBlob(canvas) {
         return new Promise(function (resolve, reject) {
-            canvas.toBlob(function (blob) {
-                if (blob) resolve(blob);
-                else reject(new Error("canvas toBlob failed"));
-            }, "image/png");
+            canvas.toBlob(function (blob) { if (blob) resolve(blob); else reject(new Error("canvas toBlob failed")); }, "image/png");
         });
     }
 
     function renderScoreBar(label, score, cls) {
         var percent = Math.max(0, Math.min(100, score / 5 * 100));
-        return '' +
-            '<div class="nga-score-row">' +
-                '<div class="nga-score-label">' + escapeHtml(label) + '</div>' +
-                '<div class="nga-score-track"><div class="nga-score-fill ' + cls + '" style="width:' + percent + '%"></div></div>' +
-                '<div class="nga-score-value">' + score.toFixed(1) + '</div>' +
-            '</div>';
+        return '<div class="nga-score-row"><div class="nga-score-label">' + escapeHtml(label) + '</div><div class="nga-score-track"><div class="nga-score-fill ' + cls + '" style="width:' + percent + '%"></div></div><div class="nga-score-value">' + score.toFixed(1) + '</div></div>';
     }
 
     function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, function (c) {
-            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-        });
+        return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
     }
 
-    // ===================== 解析回帖 =====================
     function parsePost(html) {
         var doc = new DOMParser().parseFromString(html, "text/html");
         var results = [];
@@ -1295,11 +1056,8 @@
             var post = row.querySelector("div.postcontent");
             if (!post) continue;
             var text = post.textContent;
-
             var quotes = post.querySelectorAll("blockquote, .quote, .quote_content");
-            for (var j = 0; j < quotes.length; j++) {
-                text = text.replace(quotes[j].textContent, "");
-            }
+            for (var j = 0; j < quotes.length; j++) text = text.replace(quotes[j].textContent, "");
             text = text.replace(/\[在主题中的回复\]/g, "").trim();
             if (text && text.indexOf("超过限制") === -1) {
                 var forumEl = row.querySelector("span.titleadd2 a");
