@@ -45,27 +45,49 @@
 
     // ===================== Prompt =====================
     const PROMPT = `===== [金融身份鉴定 开始] =====
-[背景] 你是一名资深的金融社区观察员和心理学专家。请根据用户在NGA等论坛的回帖内容，分析其在金融投资领域的身份标签和心理账户。
-[强制规则] 请严格按以下模板格式输出，不要输出任何额外内容：
+[背景] 你是一名资深的金融社区观察员和心理学专家。请根据用户在NGA等论坛的回帖内容，输出一份适合“暗黑卡片风格 UI”展示的结构化分析结果。
+[目标用户] {USERNAME}
+[强制规则]
+1. 只能输出一个 JSON 对象，不要输出 markdown，不要输出解释，不要输出代码块标记。
+2. 所有字段都必须存在，内容必须是中文。
+3. 分数统一使用 0-5 的小数，保留 1 位，如 3.5。
+4. ` +
+`summaryTags 输出 3-4 个简短标签；identityTags 输出 4 个对象；behaviorPatterns 输出 4 个对象；riskList 输出 5 个对象。
+5. 语言风格要犀利、像社区老哥锐评，但不要低俗辱骂。
 
-💻 用户 '{USERNAME}' 金融身份深度鉴定报告
-
-[一] 核心身份标签 (多维判定)
-▷ 身份总览：(请从以下列表中选择最符合的 3-4 个标签：韭菜 / 串子(前后语言逻辑/风格明显不一致) / 股神(收益超级高) / 亚洲T王(喜欢做T，不管赚不赚，不T一下就难受) / 庄家狗(老庄派来的眼线) / 情绪垃圾桶(容易受情绪影响买卖，追涨杀跌) / 复读机 / 老登(喜欢买红利股) / 小登(喜欢买科技股) / 价值投资者(分析专业且盈利) / 车头(推荐优质股票给他人) / 跟车选手(跟随"车头"买入股票) )
-▷ 判定依据：(简述为什么贴上这些标签，引用原文逻辑)
-
-[二] 割韭菜指数评估 (1-10分)
-▷ 镰刀锋利度 [危害性]：(评分 1-10) 分析：(该用户收割他人情绪或财富的能力)
-▷ 韭菜鲜嫩度 [受害性]：(评分 1-10) 分析：(该用户容易被他人收割或洗脑的程度)
-▷ 综合危险等级：(低 / 中 / 高 / 极高)
-
-[三] 行为模式分析
-▷ 带节奏能力：(强 / 弱) 描述：(是否擅长利用情绪词、制造恐慌或狂热)
-▷ 逻辑陷阱：(是否存在偷换概念、诉诸权威、虚假因果等逻辑谬误)
-▷ 潜在动机：(引流 / 卖课 / 洗盘配合 / 单纯发泄 / 寻求认同)
-
-[四] 独家锐评
-▷ 毒舌结案陈词：(一句话总结，要犀利、一针见血)
+[JSON 格式]
+{
+  "username": "{USERNAME}",
+  "summaryTags": ["趋势分析师", "复盘控", "AI铁佬", "跟车选手"],
+  "hotness": {
+    "harvestScore": 3.5,
+    "victimScore": 2.5,
+    "overallLevel": "低",
+    "summary": "综合危险等级：低"
+  },
+  "identityTags": [
+    { "tag": "趋势分析师", "desc": "..." },
+    { "tag": "复盘控", "desc": "..." },
+    { "tag": "AI铁佬", "desc": "..." },
+    { "tag": "跟车选手", "desc": "..." }
+  ],
+  "harvestAnalysis": "...",
+  "behaviorPatterns": [
+    { "title": "带节奏", "level": "中等", "desc": "..." },
+    { "title": "逻辑陷阱", "level": "弱", "desc": "..." },
+    { "title": "逻辑漏洞", "level": "高", "desc": "..." },
+    { "title": "情绪控制", "level": "中等", "desc": "..." }
+  ],
+  "riskList": [
+    { "title": "描述型标签1", "desc": "..." },
+    { "title": "描述型标签2", "desc": "..." },
+    { "title": "描述型标签3", "desc": "..." },
+    { "title": "描述型标签4", "desc": "..." },
+    { "title": "描述型标签5", "desc": "..." }
+  ],
+  "closingLine": "一句毒舌结案陈词",
+  "disclaimer": "一句免责声明，说明仅供娱乐参考。"
+}
 
 以下是用户回帖内容：
 `;
@@ -179,6 +201,200 @@
         }
         #drawer-footer button:hover { background: #f0f0f0; }
         .nga-finance-error { color: #d32f2f; }
+        .nga-report-card {
+            background:
+                radial-gradient(circle at top left, rgba(255, 117, 24, 0.2), transparent 28%),
+                radial-gradient(circle at top right, rgba(255, 0, 122, 0.14), transparent 25%),
+                linear-gradient(180deg, #10101d 0%, #070812 100%);
+            color: #f8f1ff;
+            border-radius: 20px;
+            padding: 14px;
+            box-shadow: 0 10px 30px rgba(255, 0, 122, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .nga-report-header {
+            background: linear-gradient(135deg, #f84b63 0%, #ff9f1c 100%);
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(255, 105, 78, 0.25);
+        }
+        .nga-report-avatar {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 22px;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            flex: 0 0 auto;
+        }
+        .nga-report-name {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+        .nga-report-submeta {
+            margin-top: 6px;
+            font-size: 11px;
+            opacity: 0.92;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .nga-report-tabs {
+            margin: 14px 0 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .nga-report-chip {
+            background: linear-gradient(180deg, rgba(75, 99, 255, 0.28), rgba(100, 60, 255, 0.18));
+            color: #d8ddff;
+            border: 1px solid rgba(130, 138, 255, 0.26);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .nga-report-chip.active {
+            background: linear-gradient(180deg, rgba(255, 107, 107, 0.22), rgba(255, 140, 66, 0.2));
+            color: #ffd1d1;
+            border-color: rgba(255, 154, 102, 0.32);
+        }
+        .nga-report-section {
+            margin-top: 16px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .nga-report-title {
+            font-size: 15px;
+            font-weight: 800;
+            color: #ff5db0;
+            margin-bottom: 10px;
+        }
+        .nga-score-row {
+            display: grid;
+            grid-template-columns: 62px 1fr 40px;
+            gap: 8px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .nga-score-label {
+            color: #b8b3d6;
+            font-size: 12px;
+        }
+        .nga-score-track {
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+        .nga-score-fill {
+            height: 100%;
+            border-radius: 999px;
+        }
+        .nga-score-fill.harvest {
+            background: linear-gradient(90deg, #ff4c87, #ff2f5f);
+        }
+        .nga-score-fill.victim {
+            background: linear-gradient(90deg, #2ed3c6, #3ade77);
+        }
+        .nga-score-value {
+            color: #ffb14a;
+            font-weight: 800;
+            text-align: right;
+        }
+        .nga-score-summary {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(0, 214, 143, 0.15);
+            border: 1px solid rgba(0, 214, 143, 0.28);
+            color: #61f3bc;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .nga-tag-item,
+        .nga-behavior-item {
+            margin-bottom: 10px;
+            line-height: 1.65;
+            color: #d8d3ef;
+            font-size: 13px;
+        }
+        .nga-item-badge {
+            display: inline-block;
+            margin-right: 8px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #f7cfe8;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .nga-risk-item {
+            display: grid;
+            grid-template-columns: 22px 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .nga-risk-index {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #ff3f88, #ff7a00);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .nga-risk-title {
+            color: #fff0f6;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .nga-risk-desc {
+            color: #c7c2df;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .nga-report-quote {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(255, 0, 122, 0.08);
+            border-left: 3px solid #ff3c8f;
+            color: #ffe3f1;
+            font-style: italic;
+        }
+        .nga-report-disclaimer {
+            margin-top: 12px;
+            color: #b8b3d6;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .nga-report-footer {
+            margin-top: 16px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            color: #8f8aa8;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
     `);
 
     // ===================== 环境判断 =====================
@@ -406,9 +622,14 @@
                     // #endregion
                     if (res.status >= 200 && res.status < 300) {
                         bodyEl.dataset.raw = extractAssistantText(finalPayload);
-                        bodyEl.textContent = bodyEl.dataset.raw;
-                        bodyEl.scrollTop = bodyEl.scrollHeight;
                         if (bodyEl.dataset.raw) {
+                            var structuredReport = tryParseReport(bodyEl.dataset.raw, username);
+                            if (structuredReport) {
+                                bodyEl.innerHTML = renderReportCard(structuredReport, cfg.model);
+                            } else {
+                                bodyEl.textContent = bodyEl.dataset.raw;
+                            }
+                            bodyEl.scrollTop = bodyEl.scrollHeight;
                             statusEl.textContent = "✅ 完成";
                             document.getElementById("footer-copy").style.display = "inline-block";
                             document.getElementById("footer-clear").style.display = "inline-block";
@@ -479,6 +700,172 @@
         }
         if (typeof choice.text === "string") return choice.text;
         return "";
+    }
+
+    function tryParseReport(text, fallbackUsername) {
+        var jsonText = extractJsonText(text);
+        if (!jsonText) return null;
+        try {
+            return normalizeReport(JSON.parse(jsonText), fallbackUsername);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function extractJsonText(text) {
+        if (!text) return "";
+        var trimmed = String(text).trim();
+        var fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenceMatch) trimmed = fenceMatch[1].trim();
+        if (trimmed.charAt(0) === "{" && trimmed.charAt(trimmed.length - 1) === "}") return trimmed;
+        var first = trimmed.indexOf("{");
+        var last = trimmed.lastIndexOf("}");
+        if (first !== -1 && last !== -1 && last > first) return trimmed.slice(first, last + 1);
+        return "";
+    }
+
+    function normalizeReport(obj, fallbackUsername) {
+        var report = obj || {};
+        var hotness = report.hotness || {};
+        return {
+            username: asText(report.username || fallbackUsername || "未知用户"),
+            summaryTags: normalizeStringArray(report.summaryTags, 4, ["趋势分析", "复盘控", "AI锐评", "跟车选手"]),
+            hotness: {
+                harvestScore: normalizeScore(hotness.harvestScore, 3.2),
+                victimScore: normalizeScore(hotness.victimScore, 2.8),
+                overallLevel: normalizeLevel(hotness.overallLevel),
+                summary: asText(hotness.summary || "综合危险等级：中")
+            },
+            identityTags: normalizeObjectArray(report.identityTags, 4, function (item, i) {
+                var fallback = ["趋势分析师", "复盘控", "AI铁佬", "跟车选手"][i] || ("标签" + (i + 1));
+                return {
+                    tag: asText(item && item.tag || fallback),
+                    desc: asText(item && item.desc || "该标签暂无详细说明。")
+                };
+            }),
+            harvestAnalysis: asText(report.harvestAnalysis || "该用户更偏向情绪表达和观点复读，暂未体现出强烈的“带人上车”能力。"),
+            behaviorPatterns: normalizeObjectArray(report.behaviorPatterns, 4, function (item, i) {
+                var titles = ["带节奏", "逻辑陷阱", "逻辑漏洞", "情绪控制"];
+                return {
+                    title: asText(item && item.title || titles[i] || ("行为项" + (i + 1))),
+                    level: asText(item && item.level || "中等"),
+                    desc: asText(item && item.desc || "暂无额外分析。")
+                };
+            }),
+            riskList: normalizeObjectArray(report.riskList, 5, function (item, i) {
+                return {
+                    title: asText(item && item.title || ("风险标签" + (i + 1))),
+                    desc: asText(item && item.desc || "暂无补充说明。")
+                };
+            }),
+            closingLine: asText(report.closingLine || "你问哥值不值先看仓位，哥问你敢不敢先看脑子。"),
+            disclaimer: asText(report.disclaimer || "本报告仅供娱乐参考，请勿据此进行任何现实投资决策。")
+        };
+    }
+
+    function normalizeStringArray(value, maxLen, fallback) {
+        var arr = Array.isArray(value) ? value : [];
+        var result = [];
+        for (var i = 0; i < arr.length && result.length < maxLen; i++) {
+            var text = asText(arr[i]);
+            if (text) result.push(text);
+        }
+        while (result.length < Math.min(maxLen, fallback.length)) result.push(fallback[result.length]);
+        return result;
+    }
+
+    function normalizeObjectArray(value, maxLen, mapper) {
+        var arr = Array.isArray(value) ? value : [];
+        var result = [];
+        for (var i = 0; i < maxLen; i++) {
+            result.push(mapper(arr[i], i));
+        }
+        return result;
+    }
+
+    function normalizeScore(value, fallback) {
+        var n = parseFloat(value);
+        if (isNaN(n)) n = fallback;
+        if (n < 0) n = 0;
+        if (n > 5) n = 5;
+        return Math.round(n * 10) / 10;
+    }
+
+    function normalizeLevel(value) {
+        var text = asText(value);
+        if (text === "低" || text === "中" || text === "高" || text === "极高") return text;
+        return "中";
+    }
+
+    function asText(value) {
+        return value == null ? "" : String(value).trim();
+    }
+
+    function renderReportCard(report, modelName) {
+        var chipsHtml = report.summaryTags.map(function (tag, index) {
+            return '<span class="nga-report-chip' + (index === 0 ? ' active' : '') + '">' + escapeHtml(tag) + '</span>';
+        }).join("");
+        var identityHtml = report.identityTags.map(function (item) {
+            return '<div class="nga-tag-item"><span class="nga-item-badge">' + escapeHtml(item.tag) + '</span>' + escapeHtml(item.desc) + '</div>';
+        }).join("");
+        var behaviorHtml = report.behaviorPatterns.map(function (item) {
+            return '<div class="nga-behavior-item"><span class="nga-item-badge">' + escapeHtml(item.title + " · " + item.level) + '</span>' + escapeHtml(item.desc) + '</div>';
+        }).join("");
+        var riskHtml = report.riskList.map(function (item, index) {
+            return '<div class="nga-risk-item"><div class="nga-risk-index">' + (index + 1) + '</div><div><div class="nga-risk-title">' + escapeHtml(item.title) + '</div><div class="nga-risk-desc">' + escapeHtml(item.desc) + '</div></div></div>';
+        }).join("");
+
+        return '' +
+            '<div class="nga-report-card">' +
+                '<div class="nga-report-header">' +
+                    '<div class="nga-report-avatar">' + escapeHtml(report.username.slice(0, 1).toUpperCase()) + '</div>' +
+                    '<div>' +
+                        '<div class="nga-report-name">' + escapeHtml(report.username) + '</div>' +
+                        '<div class="nga-report-submeta">' +
+                            '<span>金融身份</span>' +
+                            '<span>标签 ' + report.summaryTags.length + '</span>' +
+                            '<span>风险 ' + escapeHtml(report.hotness.overallLevel) + '</span>' +
+                            '<span>' + escapeHtml(modelName || "AI 分析") + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="nga-report-tabs">' + chipsHtml + '</div>' +
+                '<div class="nga-report-section">' +
+                    '<div class="nga-report-title">割韭菜指数评估</div>' +
+                    renderScoreBar("镰刀锋利", report.hotness.harvestScore, "harvest") +
+                    renderScoreBar("韭菜鲜嫩", report.hotness.victimScore, "victim") +
+                    '<div class="nga-score-summary">' + escapeHtml(report.hotness.summary) + '</div>' +
+                '</div>' +
+                '<div class="nga-report-section">' +
+                    '<div class="nga-report-title">核心身份标签</div>' +
+                    identityHtml +
+                '</div>' +
+                '<div class="nga-report-section">' +
+                    '<div class="nga-report-title">割韭菜程度分析</div>' +
+                    '<div class="nga-tag-item">' + escapeHtml(report.harvestAnalysis) + '</div>' +
+                '</div>' +
+                '<div class="nga-report-section">' +
+                    '<div class="nga-report-title">行为模式分析</div>' +
+                    behaviorHtml +
+                '</div>' +
+                '<div class="nga-report-section">' +
+                    '<div class="nga-report-title">交易体系警惕</div>' +
+                    riskHtml +
+                '</div>' +
+                '<div class="nga-report-quote">' + escapeHtml(report.closingLine) + '</div>' +
+                '<div class="nga-report-disclaimer">' + escapeHtml(report.disclaimer) + '</div>' +
+                '<div class="nga-report-footer"><span>NGA大韭菜指数</span><span>第三方 AI 生成</span></div>' +
+            '</div>';
+    }
+
+    function renderScoreBar(label, score, cls) {
+        var percent = Math.max(0, Math.min(100, score / 5 * 100));
+        return '' +
+            '<div class="nga-score-row">' +
+                '<div class="nga-score-label">' + escapeHtml(label) + '</div>' +
+                '<div class="nga-score-track"><div class="nga-score-fill ' + cls + '" style="width:' + percent + '%"></div></div>' +
+                '<div class="nga-score-value">' + score.toFixed(1) + '</div>' +
+            '</div>';
     }
 
     function escapeHtml(s) {
