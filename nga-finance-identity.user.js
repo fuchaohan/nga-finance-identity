@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA大韭菜指数
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  一键抓取NGA用户回帖，分析其金融身份(韭菜、反串、大神)。通过自定义 OpenAI 兼容接口调用第三方 AI。
 // @author       You
 // @match        *://bbs.nga.cn/read.php?*
@@ -481,6 +481,7 @@
             btn.className = "nga-finance-btn";
             btn.textContent = "大韭菜指数";
             btn.dataset.avatarUrl = findAvatarUrl(author);
+            btn.dataset.profileUrl = normalizeUrl(author.getAttribute("href") || author.href || "");
             (function (uid, username, button, authorEl) {
                 button.onclick = function (e) {
                     e.preventDefault();
@@ -495,6 +496,7 @@
         var cfg = getConfig();
         var traceId = "nga-" + uid + "-" + Date.now();
         var avatarUrl = btn.dataset.avatarUrl || "";
+        var profileUrl = btn.dataset.profileUrl || "";
         // #region debug-point A:start-analysis
         debugReport("A", "nga-finance-identity.user.js:startAnalysis", "startAnalysis entered", {
             uid: uid,
@@ -502,7 +504,8 @@
             hasBaseUrl: !!cfg.baseUrl,
             hasApiKey: !!cfg.apiKey,
             model: cfg.model || "",
-            hasAvatarUrl: !!avatarUrl
+            hasAvatarUrl: !!avatarUrl,
+            profileUrl: profileUrl
         }, traceId);
         // #endregion
         if (!isConfigValid(cfg)) {
@@ -525,7 +528,7 @@
             var ngaHost = window.location.host;
             var url = "https://" + ngaHost + "/thread.php?searchpost=1&authorid=" + uid;
             var postPromise = fetchNgaPage(url, traceId, "searchpost");
-            var profilePromise = fetchUserProfileMeta(uid, ngaHost, authorEl, traceId);
+            var profilePromise = fetchUserProfileMeta(uid, ngaHost, authorEl, traceId, profileUrl);
             var results = await Promise.all([postPromise, profilePromise]);
             var html = results[0];
             var profileMeta = results[1];
@@ -629,15 +632,50 @@
         return bestScore >= 6 ? bestUrl : "";
     }
 
-    function fetchUserProfileMeta(uid, ngaHost, author, traceId) {
+    function fetchUserProfileMeta(uid, ngaHost, author, traceId, profileUrl) {
         var localMeta = extractLocalProfileMeta(author);
-        var profileUrl = "https://" + ngaHost + "/nuke.php?func=ucp&uid=" + uid;
-        return fetchNgaPage(profileUrl, traceId, "ucp").then(function (html) {
-            var remoteMeta = parseProfileMetaFromProfilePage(html);
+        var profileUrls = buildProfileUrls(uid, ngaHost, profileUrl);
+        return collectRemoteProfileMeta(profileUrls, 0, {}, uid, traceId).then(function (remoteMeta) {
             return mergeProfileMeta(localMeta, remoteMeta);
         }).catch(function () {
             return mergeProfileMeta(localMeta, {});
         });
+    }
+
+    function buildProfileUrls(uid, ngaHost, profileUrl) {
+        var urls = [];
+        pushUniqueUrl(urls, profileUrl);
+        pushUniqueUrl(urls, "https://" + ngaHost + "/nuke.php?func=ucp&uid=" + uid);
+        pushUniqueUrl(urls, "https://nga.178.com/nuke.php?func=ucp&uid=" + uid);
+        return urls;
+    }
+
+    function pushUniqueUrl(list, url) {
+        var normalized = normalizeUrl(url);
+        if (normalized && list.indexOf(normalized) === -1) list.push(normalized);
+    }
+
+    function collectRemoteProfileMeta(urls, index, accMeta, uid, traceId) {
+        if (!urls || index >= urls.length) return Promise.resolve(accMeta || {});
+        var currentUrl = urls[index];
+        return fetchNgaPage(currentUrl, traceId, "ucp-" + index).then(function (html) {
+            var parsedMeta = parseProfileMetaFromProfilePage(html);
+            var nextMeta = mergeRemoteProfileMeta(accMeta, parsedMeta);
+            return collectRemoteProfileMeta(urls, index + 1, nextMeta, uid, traceId);
+        }).catch(function () {
+            return collectRemoteProfileMeta(urls, index + 1, accMeta, uid, traceId);
+        });
+    }
+
+    function mergeRemoteProfileMeta(prevMeta, nextMeta) {
+        var prev = prevMeta || {};
+        var next = nextMeta || {};
+        return {
+            ipLocation: firstUsefulValue(next.ipLocation, prev.ipLocation, "未公开"),
+            registerTime: firstUsefulValue(next.registerTime, prev.registerTime, "未知"),
+            postCount: normalizePostCount(firstUsefulValue(next.postCount, prev.postCount, "未知")),
+            userGroup: cleanUserGroup(firstUsefulValue(next.userGroup, prev.userGroup, "未知"))
+        };
     }
 
     function extractLocalProfileMeta(author) {
@@ -698,20 +736,67 @@
 
     function parseProfileMetaFromProfilePage(html) {
         var doc = new DOMParser().parseFromString(html, "text/html");
-        var text = compactMetaText(doc.body ? (doc.body.innerText || doc.body.textContent || "") : html);
-        return {
+        var rawText = doc.body ? (doc.body.innerText || doc.body.textContent || "") : html;
+        var lines = extractNormalizedProfileLines(rawText);
+        var text = lines.join("|");
+        var lineMeta = extractProfileMetaFromLines(lines);
+        var parsed = {
             ipLocation: extractMetaValue(text, [
-                /IP属地[:：]?([^\s|,，#]+)/i
-            ], "未公开"),
+                /(?:IP属地|IP地区|IP地域)[:：]?([^|#]+)/i
+            ], lineMeta.ipLocation || "未公开"),
             registerTime: extractMetaValue(text, [
                 /注册日期[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i,
                 /注册时间[:：]?([0-9]{2,4}[-\/.年][0-9]{1,2}(?:[-\/.月][0-9]{1,2})?(?:日)?(?:[T\s]?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?)/i
-            ], "未知"),
-            postCount: "未知",
+            ], lineMeta.registerTime || "未知"),
+            postCount: normalizePostCount(extractMetaValue(text, [
+                /(?:发帖数|发帖|帖子数)[:：]?([0-9][0-9,万千wW+]*)/i
+            ], lineMeta.postCount || "未知")),
             userGroup: extractMetaValue(text, [
                 /用户组[:：]?([^|#]+)/i
-            ], "未知")
+            ], lineMeta.userGroup || "未知")
         };
+        return parsed;
+    }
+
+    function extractNormalizedProfileLines(text) {
+        return String(text || "")
+            .split(/\r?\n+/)
+            .map(function (line) { return compactMetaText(line); })
+            .filter(function (line) { return !!line; });
+    }
+
+    function extractProfileMetaFromLines(lines) {
+        var meta = {
+            ipLocation: "未公开",
+            registerTime: "未知",
+            postCount: "未知",
+            userGroup: "未知"
+        };
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var nextLine = i + 1 < lines.length ? lines[i + 1] : "";
+            if (meta.userGroup === "未知" && line.indexOf("用户组") === 0) {
+                meta.userGroup = extractLineFieldValue(line, nextLine, "未知");
+            } else if (meta.registerTime === "未知" && (line.indexOf("注册日期") === 0 || line.indexOf("注册时间") === 0)) {
+                meta.registerTime = extractLineFieldValue(line, nextLine, "未知");
+            } else if (meta.ipLocation === "未公开" && /^(IP属地|IP地区|IP地域)/.test(line)) {
+                meta.ipLocation = extractLineFieldValue(line, nextLine, "未公开");
+            } else if (meta.postCount === "未知" && /^(发帖数|发帖|帖子数)/.test(line)) {
+                meta.postCount = normalizePostCount(extractLineFieldValue(line, nextLine, "未知"));
+            }
+        }
+        return meta;
+    }
+
+    function extractLineFieldValue(line, nextLine, fallback) {
+        var value = "";
+        var match = String(line || "").match(/^[^:：]+[:：](.*)$/);
+        if (match) value = match[1];
+        if (!value && nextLine && nextLine.indexOf(":") === -1 && nextLine.indexOf("：") === -1) {
+            value = nextLine;
+        }
+        value = sanitizeProfileValue(value);
+        return value || fallback;
     }
 
     function extractMetaValue(text, patterns, fallback) {
