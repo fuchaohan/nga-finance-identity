@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA大韭菜指数
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  一键抓取NGA用户回帖，分析其金融身份(韭菜、反串、大神)。通过自定义 OpenAI 兼容接口调用第三方 AI。
 // @author       You
 // @match        *://bbs.nga.cn/read.php?*
@@ -39,6 +39,7 @@
     // 默认值 (用户可通过油猴菜单修改)
     const DEFAULT_BASE_URL = "https://api.openai.com/v1";
     const DEFAULT_MODEL = "gpt-4o-mini";
+    const FIXED_DISCLAIMER = "以上内容基于公开论坛发言的人工智能分析，仅供娱乐参考，不构成任何投资建议。";
     const DEBUG_SERVER_URL = "http://127.0.0.1:7777/event";
     const DEBUG_SESSION_ID = "deepseek-no-response";
     const DEBUG_RUN_ID = "pre-fix";
@@ -54,6 +55,8 @@
 4. ` +
 `summaryTags 输出 3-4 个简短标签；identityTags 输出 4 个对象；behaviorPatterns 输出 4 个对象；riskList 输出 5 个对象。
 5. 语言风格要犀利、像社区老哥锐评，但不要低俗辱骂。
+6. ` +
+`closingLine 必须输出一句短促、毒舌、一针见血的结案陈词。
 
 [JSON 格式]
 {
@@ -86,7 +89,7 @@
     { "title": "描述型标签5", "desc": "..." }
   ],
   "closingLine": "一句毒舌结案陈词",
-  "disclaimer": "一句免责声明，说明仅供娱乐参考。"
+  "disclaimer": "以上内容基于公开论坛发言的人工智能分析，仅供娱乐参考，不构成任何投资建议。"
 }
 
 以下是用户回帖内容：
@@ -235,6 +238,13 @@
             background: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.4);
             flex: 0 0 auto;
+            overflow: hidden;
+        }
+        .nga-report-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
         .nga-report-name {
             font-size: 22px;
@@ -378,6 +388,13 @@
             color: #ffe3f1;
             font-style: italic;
         }
+        .nga-report-quote-title {
+            margin-bottom: 6px;
+            color: #ff8bc7;
+            font-size: 12px;
+            font-weight: 800;
+            font-style: normal;
+        }
         .nga-report-disclaimer {
             margin-top: 12px;
             color: #b8b3d6;
@@ -458,6 +475,8 @@
             var btn = document.createElement("button");
             btn.className = "nga-finance-btn";
             btn.textContent = "大韭菜指数";
+            btn.dataset.avatarUrl = findAvatarUrl(author);
+            btn.dataset.profileMeta = JSON.stringify(findUserProfileMeta(author));
             (function (uid, username, button) {
                 button.onclick = function (e) {
                     e.preventDefault();
@@ -471,13 +490,17 @@
     async function startAnalysis(uid, username, btn) {
         var cfg = getConfig();
         var traceId = "nga-" + uid + "-" + Date.now();
+        var avatarUrl = btn.dataset.avatarUrl || "";
+        var profileMeta = parseProfileMeta(btn.dataset.profileMeta);
         // #region debug-point A:start-analysis
         debugReport("A", "nga-finance-identity.user.js:startAnalysis", "startAnalysis entered", {
             uid: uid,
             username: username,
             hasBaseUrl: !!cfg.baseUrl,
             hasApiKey: !!cfg.apiKey,
-            model: cfg.model || ""
+            model: cfg.model || "",
+            hasAvatarUrl: !!avatarUrl,
+            hasProfileMeta: !!(profileMeta.ipLocation || profileMeta.registerTime || profileMeta.postCount || profileMeta.userGroup)
         }, traceId);
         // #endregion
         if (!isConfigValid(cfg)) {
@@ -544,7 +567,7 @@
             document.getElementById("drawer-body").innerHTML = '<span class="placeholder">⏳ AI 分析中，请稍候…</span>';
             document.getElementById("footer-status").textContent = "请求 API: " + cfg.model;
 
-            await callAI(cfg, fullPrompt, username, traceId);
+            await callAI(cfg, fullPrompt, username, avatarUrl, profileMeta, traceId);
         } catch (err) {
             // #region debug-point E:start-analysis-catch
             debugReport("E", "nga-finance-identity.user.js:startAnalysis", "startAnalysis caught error", {
@@ -559,6 +582,150 @@
         }
     }
 
+    function findAvatarUrl(author) {
+        var containers = [
+            author,
+            author.parentElement,
+            author.closest("td"),
+            author.closest("tr"),
+            author.closest("table"),
+            author.closest("[id^='post']"),
+            author.closest(".posterinfo")
+        ];
+        var bestScore = -1;
+        var bestUrl = "";
+        var seen = {};
+        for (var i = 0; i < containers.length; i++) {
+            var container = containers[i];
+            if (!container) continue;
+            var images = container.querySelectorAll("img");
+            for (var j = 0; j < images.length; j++) {
+                var img = images[j];
+                var src = normalizeUrl(img.getAttribute("src") || img.currentSrc || "");
+                if (!src || seen[src]) continue;
+                seen[src] = true;
+                var score = scoreAvatarImage(img, src);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestUrl = src;
+                }
+            }
+        }
+        return bestScore >= 6 ? bestUrl : "";
+    }
+
+    function findUserProfileMeta(author) {
+        var lines = collectProfileLines(author);
+        return {
+            ipLocation: findProfileField(lines, [
+                /(?:IP\s*属地|属地|来自)\s*[:：]?\s*([^\s|/,，]+(?:[省市区县州特别行政区自治区海外]{0,8}[^\s|/,，]*)?)/i
+            ], "未公开"),
+            registerTime: findProfileField(lines, [
+                /(?:注册(?:时间|日期)?|注册于)\s*[:：]?\s*([0-9]{2,4}[.\-\/年][0-9]{1,2}(?:[.\-\/月][0-9]{1,2})?日?)/i
+            ], "未知"),
+            postCount: normalizePostCount(findProfileField(lines, [
+                /(?:发帖数|帖子数|发帖|帖子|贴数|总帖数)\s*[:：]?\s*([0-9][0-9,]*)/i
+            ], "未知")),
+            userGroup: findProfileField(lines, [
+                /(?:用户组|组别|头衔|军衔|等级|级别|Lv\.?)\s*[:：]?\s*([^\n|]{1,24})/i
+            ], "未知")
+        };
+    }
+
+    function collectProfileLines(author) {
+        var containers = [
+            author.parentElement,
+            author.closest("td"),
+            author.closest("tr"),
+            author.closest("table"),
+            author.closest("[id^='post']"),
+            author.closest(".posterinfo"),
+            author.closest(".postauthor")
+        ];
+        var seen = {};
+        var lines = [];
+        for (var i = 0; i < containers.length; i++) {
+            var container = containers[i];
+            if (!container) continue;
+            var rawText = (container.innerText || container.textContent || "").split(/\n+/);
+            for (var j = 0; j < rawText.length; j++) {
+                var line = rawText[j].replace(/\s+/g, " ").trim();
+                if (!line || line.length > 120 || seen[line]) continue;
+                if (/(IP|属地|注册|发帖|帖子|贴数|用户组|组别|头衔|军衔|等级|Lv\.?)/i.test(line)) {
+                    seen[line] = true;
+                    lines.push(line);
+                }
+            }
+        }
+        return lines;
+    }
+
+    function findProfileField(lines, patterns, fallback) {
+        for (var i = 0; i < lines.length; i++) {
+            for (var j = 0; j < patterns.length; j++) {
+                var match = lines[i].match(patterns[j]);
+                if (match && match[1]) {
+                    return sanitizeProfileValue(match[1]);
+                }
+            }
+        }
+        return fallback;
+    }
+
+    function sanitizeProfileValue(value) {
+        return String(value || "")
+            .replace(/^[\s:：|/-]+/, "")
+            .replace(/[\s|/]+$/, "")
+            .trim();
+    }
+
+    function normalizePostCount(value) {
+        var text = sanitizeProfileValue(value);
+        if (!text || text === "未知") return "未知";
+        return /帖$/.test(text) ? text : text + "帖";
+    }
+
+    function parseProfileMeta(raw) {
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function scoreAvatarImage(img, src) {
+        if (!src || /^data:/i.test(src)) return -1;
+        var score = 0;
+        var hint = [
+            img.className || "",
+            img.id || "",
+            img.getAttribute("alt") || "",
+            img.getAttribute("title") || "",
+            src
+        ].join(" ").toLowerCase();
+        var width = img.naturalWidth || img.width || parseInt(img.getAttribute("width"), 10) || 0;
+        var height = img.naturalHeight || img.height || parseInt(img.getAttribute("height"), 10) || 0;
+        if (/avatar|头像|head|face|photo/.test(hint)) score += 8;
+        if (/uc_server|avatar\.php|portrait|upload/.test(hint)) score += 6;
+        if (/icon|badge|medal|emot|smile|rank|star|level/.test(hint)) score -= 8;
+        if (width >= 24 && width <= 180) score += 4;
+        if (height >= 24 && height <= 180) score += 4;
+        if (Math.abs(width - height) <= 12 && width > 0 && height > 0) score += 2;
+        return score;
+    }
+
+    function normalizeUrl(url) {
+        if (!url) return "";
+        if (url.indexOf("//") === 0) return window.location.protocol + url;
+        if (/^https?:\/\//i.test(url)) return url;
+        try {
+            return new URL(url, window.location.href).href;
+        } catch (e) {
+            return url;
+        }
+    }
+
     function openDrawerWith(bodyHtml, status, username) {
         var drawer = document.getElementById("nga-finance-drawer");
         drawer.classList.add("open");
@@ -570,7 +737,7 @@
     }
 
     // ===================== 调用第三方 AI (OpenAI 兼容) =====================
-    function callAI(cfg, prompt, username, traceId) {
+    function callAI(cfg, prompt, username, avatarUrl, profileMeta, traceId) {
         return new Promise(function (resolve, reject) {
             var endpoint = cfg.baseUrl + "/chat/completions";
             var body = JSON.stringify({
@@ -623,7 +790,7 @@
                     if (res.status >= 200 && res.status < 300) {
                         bodyEl.dataset.raw = extractAssistantText(finalPayload);
                         if (bodyEl.dataset.raw) {
-                            var structuredReport = tryParseReport(bodyEl.dataset.raw, username);
+                            var structuredReport = tryParseReport(bodyEl.dataset.raw, username, avatarUrl, profileMeta);
                             if (structuredReport) {
                                 bodyEl.innerHTML = renderReportCard(structuredReport, cfg.model);
                             } else {
@@ -702,11 +869,11 @@
         return "";
     }
 
-    function tryParseReport(text, fallbackUsername) {
+    function tryParseReport(text, fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta) {
         var jsonText = extractJsonText(text);
         if (!jsonText) return null;
         try {
-            return normalizeReport(JSON.parse(jsonText), fallbackUsername);
+            return normalizeReport(JSON.parse(jsonText), fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta);
         } catch (e) {
             return null;
         }
@@ -724,11 +891,14 @@
         return "";
     }
 
-    function normalizeReport(obj, fallbackUsername) {
+    function normalizeReport(obj, fallbackUsername, fallbackAvatarUrl, fallbackProfileMeta) {
         var report = obj || {};
         var hotness = report.hotness || {};
+        var profile = report.profile || fallbackProfileMeta || {};
         return {
             username: asText(report.username || fallbackUsername || "未知用户"),
+            avatarUrl: normalizeAvatarUrl(report.avatarUrl || fallbackAvatarUrl || ""),
+            profile: normalizeProfile(profile),
             summaryTags: normalizeStringArray(report.summaryTags, 4, ["趋势分析", "复盘控", "AI锐评", "跟车选手"]),
             hotness: {
                 harvestScore: normalizeScore(hotness.harvestScore, 3.2),
@@ -759,7 +929,7 @@
                 };
             }),
             closingLine: asText(report.closingLine || "你问哥值不值先看仓位，哥问你敢不敢先看脑子。"),
-            disclaimer: asText(report.disclaimer || "本报告仅供娱乐参考，请勿据此进行任何现实投资决策。")
+            disclaimer: asText(report.disclaimer || FIXED_DISCLAIMER)
         };
     }
 
@@ -801,7 +971,32 @@
         return value == null ? "" : String(value).trim();
     }
 
+    function normalizeAvatarUrl(url) {
+        var normalized = normalizeUrl(asText(url));
+        return /^https?:\/\//i.test(normalized) ? normalized : "";
+    }
+
+    function normalizeProfile(profile) {
+        var data = profile || {};
+        return {
+            ipLocation: asText(data.ipLocation || data.ip || "未公开"),
+            registerTime: asText(data.registerTime || data.registeredAt || "未知"),
+            postCount: normalizePostCount(data.postCount || data.posts || "未知"),
+            userGroup: asText(data.userGroup || data.group || "未知")
+        };
+    }
+
     function renderReportCard(report, modelName) {
+        var generatedAt = formatGeneratedAt(new Date());
+        var avatarHtml = report.avatarUrl
+            ? '<img src="' + escapeHtml(report.avatarUrl) + '" alt="' + escapeHtml(report.username) + '">'
+            : escapeHtml(report.username.slice(0, 1).toUpperCase());
+        var submetaItems = [
+            "📍 " + report.profile.ipLocation,
+            "🗓️ " + report.profile.registerTime,
+            "📝 " + report.profile.postCount,
+            "👥 " + report.profile.userGroup
+        ];
         var chipsHtml = report.summaryTags.map(function (tag, index) {
             return '<span class="nga-report-chip' + (index === 0 ? ' active' : '') + '">' + escapeHtml(tag) + '</span>';
         }).join("");
@@ -818,44 +1013,57 @@
         return '' +
             '<div class="nga-report-card">' +
                 '<div class="nga-report-header">' +
-                    '<div class="nga-report-avatar">' + escapeHtml(report.username.slice(0, 1).toUpperCase()) + '</div>' +
+                    '<div class="nga-report-avatar">' + avatarHtml + '</div>' +
                     '<div>' +
                         '<div class="nga-report-name">' + escapeHtml(report.username) + '</div>' +
                         '<div class="nga-report-submeta">' +
-                            '<span>金融身份</span>' +
-                            '<span>标签 ' + report.summaryTags.length + '</span>' +
-                            '<span>风险 ' + escapeHtml(report.hotness.overallLevel) + '</span>' +
-                            '<span>' + escapeHtml(modelName || "AI 分析") + '</span>' +
+                            '<span>' + escapeHtml(submetaItems[0]) + '</span>' +
+                            '<span>' + escapeHtml(submetaItems[1]) + '</span>' +
+                            '<span>' + escapeHtml(submetaItems[2]) + '</span>' +
+                            '<span>' + escapeHtml(submetaItems[3]) + '</span>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
                 '<div class="nga-report-tabs">' + chipsHtml + '</div>' +
                 '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">割韭菜指数评估</div>' +
+                    '<div class="nga-report-title">🎯 割韭菜指数评估</div>' +
                     renderScoreBar("镰刀锋利", report.hotness.harvestScore, "harvest") +
                     renderScoreBar("韭菜鲜嫩", report.hotness.victimScore, "victim") +
                     '<div class="nga-score-summary">' + escapeHtml(report.hotness.summary) + '</div>' +
                 '</div>' +
                 '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">核心身份标签</div>' +
+                    '<div class="nga-report-title">🔴 核心身份标签</div>' +
                     identityHtml +
                 '</div>' +
                 '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">割韭菜程度分析</div>' +
+                    '<div class="nga-report-title">🔴 割韭菜程度分析</div>' +
                     '<div class="nga-tag-item">' + escapeHtml(report.harvestAnalysis) + '</div>' +
                 '</div>' +
                 '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">行为模式分析</div>' +
+                    '<div class="nga-report-title">🔴 行为模式分析</div>' +
                     behaviorHtml +
                 '</div>' +
                 '<div class="nga-report-section">' +
-                    '<div class="nga-report-title">交易体系警惕</div>' +
+                    '<div class="nga-report-title">🔴 交易体系警惕</div>' +
                     riskHtml +
                 '</div>' +
-                '<div class="nga-report-quote">' + escapeHtml(report.closingLine) + '</div>' +
-                '<div class="nga-report-disclaimer">' + escapeHtml(report.disclaimer) + '</div>' +
-                '<div class="nga-report-footer"><span>NGA大韭菜指数</span><span>第三方 AI 生成</span></div>' +
+                '<div class="nga-report-quote"><div class="nga-report-quote-title">毒舌结案陈词</div><div>' + escapeHtml(report.closingLine) + '</div></div>' +
+                '<div class="nga-report-disclaimer">' + escapeHtml(FIXED_DISCLAIMER) + '</div>' +
+                '<div class="nga-report-footer"><span>NGA大韭菜指数 · ' + escapeHtml(generatedAt) + ' · ' + escapeHtml(modelName || "未知模型") + '</span><span>第三方 AI 生成</span></div>' +
             '</div>';
+    }
+
+    function formatGeneratedAt(date) {
+        var year = date.getFullYear();
+        var month = pad2(date.getMonth() + 1);
+        var day = pad2(date.getDate());
+        var hour = pad2(date.getHours());
+        var minute = pad2(date.getMinutes());
+        return year + "-" + month + "-" + day + " " + hour + ":" + minute;
+    }
+
+    function pad2(value) {
+        return value < 10 ? "0" + value : String(value);
     }
 
     function renderScoreBar(label, score, cls) {
