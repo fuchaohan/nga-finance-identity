@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA大韭菜指数
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  一键抓取NGA用户回帖，分析其金融身份(韭菜、反串、大神)。通过自定义 OpenAI 兼容接口调用第三方 AI。
 // @author       You
 // @match        *://bbs.nga.cn/read.php?*
