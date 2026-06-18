@@ -18,6 +18,7 @@
 // @grant        GM_registerMenuCommand
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
 // @connect      *
+// @homepageURL  https://greasyfork.org/zh-CN/scripts/582392-nga大韭菜指数
 // @downloadURL  https://raw.githubusercontent.com/fuchaohan/nga-finance-identity/main/nga-finance-identity.user.js
 // @updateURL    https://raw.githubusercontent.com/fuchaohan/nga-finance-identity/main/nga-finance-identity.user.js
 // @run-at       document-end

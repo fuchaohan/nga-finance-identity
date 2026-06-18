@@ -2,6 +2,8 @@
 
 一个 Tampermonkey 油猴脚本，当前版本为 `v2.6`。
 
+- Greasy Fork: https://greasyfork.org/zh-CN/scripts/582392-nga%E5%A4%A7%E9%9F%AD%E8%8F%9C%E6%8C%87%E6%95%B0
+
 它会在 NGA 帖子页的用户名旁增加“大韭菜指数”按钮，一键抓取该用户的历史回帖，并调用任意 OpenAI 兼容的 AI 模型 API 进行“金融身份”分析，最终以暗色卡片报告的形式展示。
 
 ## 来源说明
