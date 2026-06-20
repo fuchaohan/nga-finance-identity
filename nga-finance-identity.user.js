@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA大韭菜指数
 // @namespace    http://tampermonkey.net/
-// @version      2.7
+// @version      2.8
 // @description  一键抓取NGA用户回帖，分析其金融身份(韭菜、反串、大神)。通过自定义 OpenAI 兼容接口调用第三方 AI。
 // @author       You
 // @match        *://bbs.nga.cn/read.php?*
@@ -534,7 +534,7 @@
             var results = await Promise.all([postPromise, profilePromise]);
             var html = results[0];
             var profileMeta = results[1];
-            avatarUrl = normalizeAvatarUrl((profileMeta && profileMeta.avatarUrl) || avatarUrl || "");
+            avatarUrl = normalizeAvatarUrl(avatarUrl || "");
 
             var content = parsePost(html);
             // #region debug-point B:parsed-post
@@ -715,7 +715,6 @@
         var prev = prevMeta || {};
         var next = nextMeta || {};
         return {
-            avatarUrl: normalizeAvatarUrl(firstUsefulValue(next.avatarUrl, prev.avatarUrl, "")),
             ipLocation: firstUsefulValue(next.ipLocation, prev.ipLocation, "未公开"),
             registerTime: firstUsefulValue(next.registerTime, prev.registerTime, "未知"),
             postCount: normalizePostCount(firstUsefulValue(next.postCount, prev.postCount, "未知")),
@@ -787,7 +786,6 @@
         var text = lines.join("|");
         var lineMeta = extractProfileMetaFromLines(lines);
         var parsed = {
-            avatarUrl: normalizeAvatarUrl(domMeta.avatarUrl || ""),
             ipLocation: extractMetaValue(text, [
                 /(?:IP属地|IP地区|IP地域)[:：]?([^|#]+)/i
             ], firstUsefulValue(domMeta.ipLocation, lineMeta.ipLocation, "未公开")),
@@ -820,14 +818,12 @@
 
     function extractProfileMetaFromDom(doc) {
         var meta = {
-            avatarUrl: "",
             ipLocation: "未公开",
             registerTime: "未知",
             postCount: "未知",
             userGroup: "未知"
         };
         if (!doc) return meta;
-        meta.avatarUrl = extractAvatarUrlFromProfileDoc(doc);
         var labels = doc.querySelectorAll("label");
         for (var i = 0; i < labels.length; i++) {
             var label = labels[i];
@@ -846,22 +842,6 @@
             }
         }
         return meta;
-    }
-
-    function extractAvatarUrlFromProfileDoc(doc) {
-        if (!doc) return "";
-        var selectors = [
-            "#ucpuser_avatar_blockContent img",
-            "#ucpuser_avatar_blockContent .contentBlock img",
-            "#ucpuser_avatar_blockContent img[src]",
-            "div#ucpuser_avatar_blockContent img[src]"
-        ];
-        for (var i = 0; i < selectors.length; i++) {
-            var img = doc.querySelector(selectors[i]);
-            var src = img ? normalizeUrl(img.getAttribute("src") || img.currentSrc || "") : "";
-            if (src) return src;
-        }
-        return "";
     }
 
     function extractValueAfterLabel(label) {
@@ -933,7 +913,6 @@
         var local = localMeta || {};
         var remote = remoteMeta || {};
         return {
-            avatarUrl: normalizeAvatarUrl(firstUsefulValue(remote.avatarUrl, local.avatarUrl, "")),
             ipLocation: firstUsefulValue(remote.ipLocation, local.ipLocation, "未公开"),
             registerTime: firstUsefulValue(remote.registerTime, local.registerTime, "未知"),
             postCount: normalizePostCount(firstUsefulValue(remote.postCount, local.postCount, "未知")),
